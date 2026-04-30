@@ -1,310 +1,553 @@
-// ═══════════════════════════════════════════════════════════════════
-// Smart Reminder Widget — Renderer Process
-// ═══════════════════════════════════════════════════════════════════
-
+// Reminder Widget v2 — Renderer
 (function () {
   'use strict';
 
   // ─── State ──────────────────────────────────────────────────────
-  let reminders = [];
+  let appData = { reminders: [], stats: {}, settings: {} };
   let saveTimeout = null;
   let currentFilter = 'all';
   let searchQuery = '';
-  
-  // Settings from localStorage
-  let isSoundEnabled = localStorage.getItem('soundEnabled') !== 'false';
-  let isDarkMode = localStorage.getItem('theme') !== 'light';
 
-  // ─── DOM References ─────────────────────────────────────────────
-  const input = document.getElementById('reminderInput');
-  const listEl = document.getElementById('reminderList');
-  const emptyState = document.getElementById('emptyState');
-  const statsText = document.getElementById('statsText');
-  
-  const searchInput = document.getElementById('searchInput');
-  const toggleAdvancedBtn = document.getElementById('toggleAdvancedBtn');
-  const advancedPanel = document.getElementById('advancedPanel');
-  
-  const dateInput = document.getElementById('dateInput');
-  const timeInput = document.getElementById('timeInput');
-  const prioritySelect = document.getElementById('prioritySelect');
-  const categorySelect = document.getElementById('categorySelect');
-  
-  const themeBtn = document.getElementById('themeBtn');
-  const soundBtn = document.getElementById('soundBtn');
-  const backupBtn = document.getElementById('backupBtn');
-  const filterTabs = document.querySelectorAll('.filter-tab');
+  // Pomodoro
+  let timerInterval = null;
+  let timerSeconds = 25 * 60;
+  let timerTotal = 25 * 60;
+  let timerRunning = false;
+  let pomodoroSessions = 0;
 
-  // ─── Initialize ─────────────────────────────────────────────────
+  // XP constants
+  const XP_PER_LEVEL = 100;
+  const XP_TASK_COMPLETE = 10;
+  const XP_HIGH_PRIORITY = 20;
+  const XP_STREAK_BONUS = 5;
+
+  // ─── DOM ────────────────────────────────────────────────────────
+  const $ = (id) => document.getElementById(id);
+  const input = $('reminderInput');
+  const listEl = $('reminderList');
+  const emptyState = $('emptyState');
+  const statsText = $('statsText');
+
+  // ─── Init ───────────────────────────────────────────────────────
   async function init() {
-    reminders = await window.api.loadReminders();
-    
-    // Set theme
-    document.documentElement.setAttribute('data-theme', isDarkMode ? 'dark' : 'light');
-    updateSoundIcon();
-    
-    render();
+    appData = await window.api.loadData();
+    if (!appData.stats) appData.stats = {};
+    if (!appData.settings) appData.settings = {};
+    if (!appData.reminders) appData.reminders = [];
+    if (!appData.stats.dailyCompletions) appData.stats.dailyCompletions = {};
+
+    applyTheme(appData.settings.theme || 'dark');
+    applySoundToggle(appData.settings.soundEnabled !== false);
+    updateStreak();
+    renderTasks();
+    renderXpBar();
+    renderStats();
+    loadWeather();
+    loadSettingsUI();
+
     input.focus();
+    $('pinBtn').classList.add('active');
 
-    // Default pin status
-    document.getElementById('pinBtn').classList.add('active');
-
-    // Start background notification checker
-    setInterval(checkNotifications, 60000); // check every minute
-    setTimeout(checkNotifications, 2000); // check on startup
+    setInterval(checkNotifications, 60000);
+    setTimeout(checkNotifications, 3000);
   }
 
   document.addEventListener('DOMContentLoaded', init);
 
-  // ─── Top Bar & Theme Actions ────────────────────────────────────
-  themeBtn.addEventListener('click', () => {
-    isDarkMode = !isDarkMode;
-    document.documentElement.setAttribute('data-theme', isDarkMode ? 'dark' : 'light');
-    localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
-  });
-
-  soundBtn.addEventListener('click', () => {
-    isSoundEnabled = !isSoundEnabled;
-    localStorage.setItem('soundEnabled', isSoundEnabled);
-    updateSoundIcon();
-    if (isSoundEnabled) playSound(); // Preview sound
-  });
-
-  function updateSoundIcon() {
-    soundBtn.innerHTML = isSoundEnabled ? 
-      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>' : 
-      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>';
-    soundBtn.classList.toggle('muted', !isSoundEnabled);
-  }
-
-  backupBtn.addEventListener('click', async () => {
-    await window.api.exportBackup();
-  });
-
-  // ─── Search & Filters ───────────────────────────────────────────
-  searchInput.addEventListener('input', (e) => {
-    searchQuery = e.target.value.toLowerCase();
-    render();
-  });
-
-  filterTabs.forEach(tab => {
-    tab.addEventListener('click', (e) => {
-      filterTabs.forEach(t => t.classList.remove('active'));
-      e.target.classList.add('active');
-      currentFilter = e.target.dataset.filter;
-      render();
+  // ─── Navigation ─────────────────────────────────────────────────
+  document.querySelectorAll('.nav-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      btn.classList.add('active');
+      $(btn.dataset.view).classList.add('active');
+      if (btn.dataset.view === 'viewStats') renderStats();
     });
   });
 
-  // ─── Add Form Actions ───────────────────────────────────────────
-  toggleAdvancedBtn.addEventListener('click', () => {
-    advancedPanel.classList.toggle('visible');
+  // ─── Window Controls ────────────────────────────────────────────
+  $('minimizeBtn').addEventListener('click', () => window.api.minimizeWindow());
+  $('closeBtn').addEventListener('click', () => window.api.closeWindow());
+  $('pinBtn').addEventListener('click', async (e) => {
+    const on = await window.api.toggleAlwaysOnTop();
+    e.currentTarget.classList.toggle('active', on);
+  });
+  window.api.onFocusInput(() => input.focus());
+
+  // ─── Search & Filters ───────────────────────────────────────────
+  $('searchInput').addEventListener('input', (e) => { searchQuery = e.target.value.toLowerCase(); renderTasks(); });
+
+  document.querySelectorAll('.filter-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      currentFilter = tab.dataset.filter;
+      renderTasks();
+    });
+  });
+
+  // ─── Add Form ───────────────────────────────────────────────────
+  $('toggleAdvancedBtn').addEventListener('click', () => {
+    $('advancedPanel').classList.toggle('visible');
+    $('toggleAdvancedBtn').classList.toggle('open');
   });
 
   input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      addReminder();
-    }
+    if (e.key === 'Enter') { e.preventDefault(); addReminder(); }
   });
 
-  // ─── CRUD Operations ───────────────────────────────────────────
+  // ─── CRUD ───────────────────────────────────────────────────────
   function addReminder() {
     const text = input.value.trim();
     if (!text) return;
 
     const reminder = {
       id: Date.now().toString(36) + Math.random().toString(36).substr(2),
-      text: text,
+      text,
       completed: false,
       createdAt: new Date().toISOString(),
-      dueDate: dateInput.value || null,
-      dueTime: timeInput.value || null,
-      priority: prioritySelect.value,
-      category: categorySelect.value !== 'none' ? categorySelect.value : null,
+      dueDate: $('dateInput').value || null,
+      dueTime: $('timeInput').value || null,
+      priority: $('prioritySelect').value,
+      category: $('categorySelect').value !== 'none' ? $('categorySelect').value : null,
       notified: false
     };
 
-    reminders.unshift(reminder);
-    
-    // Reset inputs
+    appData.reminders.unshift(reminder);
     input.value = '';
-    dateInput.value = '';
-    timeInput.value = '';
-    prioritySelect.value = 'medium';
-    categorySelect.value = 'none';
-    advancedPanel.classList.remove('visible');
+    $('dateInput').value = '';
+    $('timeInput').value = '';
+    $('prioritySelect').value = 'medium';
+    $('categorySelect').value = 'none';
+    $('advancedPanel').classList.remove('visible');
+    $('toggleAdvancedBtn').classList.remove('open');
 
-    render();
+    // Send to Discord if configured
+    if (appData.settings.discordWebhook) {
+      window.api.sendDiscordWebhook({
+        webhookUrl: appData.settings.discordWebhook,
+        content: `New reminder: **${text}**` + (reminder.dueDate ? ` (Due: ${reminder.dueDate})` : '')
+      });
+    }
+
+    renderTasks();
     scheduleSave();
   }
 
   function toggleReminder(id) {
-    const reminder = reminders.find((r) => r.id === id);
-    if (reminder) {
-      reminder.completed = !reminder.completed;
-      render();
-      scheduleSave();
+    const r = appData.reminders.find(x => x.id === id);
+    if (!r) return;
+    r.completed = !r.completed;
+
+    if (r.completed) {
+      const xpGain = r.priority === 'high' ? XP_HIGH_PRIORITY : XP_TASK_COMPLETE;
+      gainXP(xpGain);
+      appData.stats.totalCompleted = (appData.stats.totalCompleted || 0) + 1;
+
+      const today = todayStr();
+      appData.stats.dailyCompletions[today] = (appData.stats.dailyCompletions[today] || 0) + 1;
     }
+
+    renderTasks();
+    renderXpBar();
+    scheduleSave();
   }
 
   function deleteReminder(id) {
-    reminders = reminders.filter((r) => r.id !== id);
-    render();
+    appData.reminders = appData.reminders.filter(x => x.id !== id);
+    renderTasks();
     scheduleSave();
   }
 
-  document.getElementById('clearDoneBtn').addEventListener('click', () => {
-    reminders = reminders.filter((r) => !r.completed);
-    render();
+  $('clearDoneBtn').addEventListener('click', () => {
+    appData.reminders = appData.reminders.filter(x => !x.completed);
+    renderTasks();
     scheduleSave();
   });
 
-  // ─── Notification System ────────────────────────────────────────
+  // ─── XP & Gamification ─────────────────────────────────────────
+  function gainXP(amount) {
+    const oldLevel = Math.floor(appData.stats.xp / XP_PER_LEVEL) + 1;
+    appData.stats.xp = (appData.stats.xp || 0) + amount;
+    const newLevel = Math.floor(appData.stats.xp / XP_PER_LEVEL) + 1;
+    appData.stats.level = newLevel;
+
+    if (newLevel > oldLevel) showLevelUp(newLevel);
+    renderXpBar();
+  }
+
+  function renderXpBar() {
+    const xp = appData.stats.xp || 0;
+    const level = Math.floor(xp / XP_PER_LEVEL) + 1;
+    const xpInLevel = xp % XP_PER_LEVEL;
+    const pct = (xpInLevel / XP_PER_LEVEL) * 100;
+
+    $('levelBadge').textContent = `Lv ${level}`;
+    $('xpText').textContent = `${xpInLevel} / ${XP_PER_LEVEL} XP`;
+    $('xpFill').style.width = pct + '%';
+
+    const streak = appData.stats.streak || 0;
+    $('streakBadge').textContent = streak > 0 ? `${streak} day streak` : '';
+  }
+
+  function showLevelUp(level) {
+    if (appData.settings.soundEnabled !== false) playSound();
+    window.api.showNotification({ title: 'Level Up!', body: `You reached Level ${level}!` });
+
+    const overlay = document.createElement('div');
+    overlay.className = 'levelup-overlay';
+    overlay.innerHTML = `<div class="levelup-card"><h2>Level ${level}</h2><p>Keep going — you are on fire.</p></div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', () => overlay.remove());
+    setTimeout(() => overlay.remove(), 3000);
+  }
+
+  function updateStreak() {
+    const today = todayStr();
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    const last = appData.stats.lastActiveDate;
+
+    if (last === today) return; // already counted today
+
+    if (last === yesterday) {
+      appData.stats.streak = (appData.stats.streak || 0) + 1;
+      gainXP(XP_STREAK_BONUS * appData.stats.streak);
+    } else if (last !== today) {
+      appData.stats.streak = 1; // reset
+    }
+
+    appData.stats.lastActiveDate = today;
+    scheduleSave();
+  }
+
+  // ─── Notifications ──────────────────────────────────────────────
   function checkNotifications() {
     const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
-    const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-
+    const today = todayStr();
+    const timeStr = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
     let triggered = false;
 
-    reminders.forEach(r => {
-      if (!r.completed && !r.notified && r.dueDate === todayStr && r.dueTime === timeStr) {
-        window.api.showNotification({
-          title: r.category ? `${r.category.toUpperCase()} Reminder` : 'Reminder Due!',
-          body: r.text
-        });
-        r.notified = true;
-        triggered = true;
+    appData.reminders.forEach(r => {
+      if (!r.completed && !r.notified && r.dueDate && r.dueTime) {
+        if (r.dueDate === today && r.dueTime === timeStr) {
+          window.api.showNotification({ title: 'Reminder Due', body: r.text });
+          r.notified = true;
+          triggered = true;
+        }
+        // Check for missed reminders
+        if (r.dueDate < today || (r.dueDate === today && r.dueTime < timeStr && !r.notified)) {
+          appData.stats.missedReminders = (appData.stats.missedReminders || 0) + 1;
+          r.notified = true;
+          triggered = true;
+        }
       }
     });
 
     if (triggered) {
-      if (isSoundEnabled) playSound();
+      if (appData.settings.soundEnabled !== false) playSound();
       scheduleSave();
-      render();
+      renderTasks();
     }
   }
 
   function playSound() {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(800, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.1);
-    
-    gain.gain.setValueAtTime(0.5, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-    
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.3);
+    try {
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(800, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.1);
+      gain.gain.setValueAtTime(0.4, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+      osc.start(); osc.stop(ctx.currentTime + 0.3);
+    } catch (e) { /* silent fail */ }
   }
 
-  // ─── Window Controls ────────────────────────────────────────────
-  document.getElementById('minimizeBtn').addEventListener('click', () => window.api.minimizeWindow());
-  document.getElementById('closeBtn').addEventListener('click', () => window.api.closeWindow());
-  document.getElementById('pinBtn').addEventListener('click', async (e) => {
-    const isOnTop = await window.api.toggleAlwaysOnTop();
-    e.currentTarget.classList.toggle('active', isOnTop);
-  });
+  // ─── Render Tasks ───────────────────────────────────────────────
+  function renderTasks() {
+    // Clear existing
+    listEl.querySelectorAll('.reminder-item, .group-header').forEach(el => el.remove());
 
-  window.api.onFocusInput(() => {
-    input.focus();
-  });
+    let filtered = appData.reminders;
+    if (searchQuery) filtered = filtered.filter(r => r.text.toLowerCase().includes(searchQuery));
 
-  // ─── Render ─────────────────────────────────────────────────────
-  function render() {
-    listEl.innerHTML = '';
-    let filtered = reminders;
-
-    // Apply Search
-    if (searchQuery) {
-      filtered = filtered.filter(r => r.text.toLowerCase().includes(searchQuery));
-    }
-
-    // Apply Tab Filters
-    const todayStr = new Date().toISOString().split('T')[0];
-    if (currentFilter === 'today') {
-      filtered = filtered.filter(r => r.dueDate === todayStr);
-    } else if (currentFilter === 'high') {
-      filtered = filtered.filter(r => r.priority === 'high');
-    } else if (currentFilter === 'work') {
-      filtered = filtered.filter(r => r.category === 'work');
-    }
+    const today = todayStr();
+    if (currentFilter === 'today') filtered = filtered.filter(r => r.dueDate === today);
+    else if (currentFilter === 'high') filtered = filtered.filter(r => r.priority === 'high');
+    else if (currentFilter === 'urgent') filtered = filtered.filter(r => r.dueDate && r.dueDate <= today && !r.completed);
 
     if (filtered.length === 0) {
-      listEl.appendChild(emptyState);
       emptyState.classList.remove('hidden');
     } else {
       emptyState.classList.add('hidden');
-      filtered.forEach((r) => listEl.appendChild(createReminderElement(r)));
+
+      // Smart sort: Urgent first, then Today, then Later, then Completed
+      const groups = { urgent: [], today: [], later: [], done: [] };
+      filtered.forEach(r => {
+        if (r.completed) groups.done.push(r);
+        else if (r.dueDate && r.dueDate < today) groups.urgent.push(r);
+        else if (r.dueDate === today) groups.today.push(r);
+        else groups.later.push(r);
+      });
+
+      // Sort within groups by priority
+      const priorityOrder = { high: 0, medium: 1, low: 2 };
+      const sortByPriority = (a, b) => (priorityOrder[a.priority] || 1) - (priorityOrder[b.priority] || 1);
+      Object.values(groups).forEach(g => g.sort(sortByPriority));
+
+      const renderGroup = (label, items) => {
+        if (items.length === 0) return;
+        const header = document.createElement('div');
+        header.className = 'group-header';
+        header.textContent = label;
+        listEl.insertBefore(header, emptyState);
+        items.forEach(r => listEl.insertBefore(createItem(r), emptyState));
+      };
+
+      renderGroup('Overdue', groups.urgent);
+      renderGroup('Today', groups.today);
+      renderGroup('Upcoming', groups.later);
+      if (groups.done.length) renderGroup('Completed', groups.done);
     }
 
-    // Update Stats
-    const total = reminders.length;
-    const done = reminders.filter(r => r.completed).length;
-    statsText.textContent = total === 0 ? '0 reminders' : `${done}/${total} completed`;
+    const total = appData.reminders.length;
+    const done = appData.reminders.filter(r => r.completed).length;
+    statsText.textContent = total === 0 ? '0 tasks' : `${done}/${total} done`;
   }
 
-  function createReminderElement(reminder) {
-    const item = document.createElement('div');
-    item.className = `reminder-item ${reminder.completed ? 'completed' : ''}`;
-    
-    let tagsHTML = '';
-    
-    if (reminder.dueDate) {
-      const isToday = reminder.dueDate === new Date().toISOString().split('T')[0];
-      const dateText = isToday ? 'Today' : reminder.dueDate;
-      const timeText = reminder.dueTime ? ` @ ${reminder.dueTime}` : '';
-      tagsHTML += `<span class="meta-tag ${isToday ? 'due-soon' : ''}">Due: ${dateText}${timeText}</span>`;
+  function createItem(r) {
+    const el = document.createElement('div');
+    let classes = 'reminder-item';
+    if (r.completed) classes += ' completed';
+    if (r.priority === 'high' && !r.completed) classes += ' priority-high';
+    if (r.priority === 'low' && !r.completed) classes += ' priority-low';
+    el.className = classes;
+
+    let tags = '';
+    if (r.dueDate) {
+      const isToday = r.dueDate === todayStr();
+      const overdue = r.dueDate < todayStr() && !r.completed;
+      const label = overdue ? 'Overdue' : isToday ? 'Today' : r.dueDate;
+      const time = r.dueTime ? ' ' + r.dueTime : '';
+      tags += `<span class="meta-tag ${overdue ? 'due-soon' : ''}">${label}${time}</span>`;
     }
-    
-    if (reminder.priority && reminder.priority !== 'medium') {
-      const pIcons = { high: 'High', low: 'Low' };
-      tagsHTML += `<span class="meta-tag priority-tag ${reminder.priority}">${pIcons[reminder.priority]}</span>`;
+    if (r.priority && r.priority !== 'medium') {
+      tags += `<span class="meta-tag priority-tag ${r.priority}">${r.priority === 'high' ? 'High' : 'Low'}</span>`;
     }
-    
-    if (reminder.category) {
-      tagsHTML += `<span class="meta-tag">${reminder.category.charAt(0).toUpperCase() + reminder.category.slice(1)}</span>`;
+    if (r.category) {
+      tags += `<span class="meta-tag">${r.category.charAt(0).toUpperCase() + r.category.slice(1)}</span>`;
     }
 
-    item.innerHTML = `
-      <label class="reminder-checkbox">
-        <input type="checkbox" ${reminder.completed ? 'checked' : ''} />
-        <div class="checkbox-visual">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-        </div>
+    el.innerHTML = `
+      <label class="reminder-checkbox"><input type="checkbox" ${r.completed ? 'checked' : ''} />
+        <div class="checkbox-visual"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
       </label>
       <div class="reminder-content">
-        <div class="reminder-text">${escapeHtml(reminder.text)}</div>
-        ${tagsHTML ? `<div class="meta-tags">${tagsHTML}</div>` : ''}
+        <div class="reminder-text">${esc(r.text)}</div>
+        ${tags ? `<div class="meta-tags">${tags}</div>` : ''}
       </div>
-      <button class="delete-btn" title="Delete">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-      </button>
+      <button class="delete-btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
     `;
 
-    item.querySelector('input[type="checkbox"]').addEventListener('change', () => toggleReminder(reminder.id));
-    item.querySelector('.delete-btn').addEventListener('click', () => deleteReminder(reminder.id));
-
-    return item;
+    el.querySelector('input').addEventListener('change', () => toggleReminder(r.id));
+    el.querySelector('.delete-btn').addEventListener('click', () => deleteReminder(r.id));
+    return el;
   }
 
-  function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+  // ─── Stats Dashboard ───────────────────────────────────────────
+  function renderStats() {
+    const s = appData.stats;
+    const xp = s.xp || 0;
+    const level = Math.floor(xp / XP_PER_LEVEL) + 1;
+    const xpInLevel = xp % XP_PER_LEVEL;
+
+    $('statLevel').textContent = level;
+    $('statXpFill').style.width = ((xpInLevel / XP_PER_LEVEL) * 100) + '%';
+    $('statXpSub').textContent = `${xpInLevel} / ${XP_PER_LEVEL} XP (${xp} total)`;
+    $('statStreak').textContent = s.streak || 0;
+    $('statTotalCompleted').textContent = s.totalCompleted || 0;
+    $('statMissed').textContent = s.missedReminders || 0;
+
+    const today = todayStr();
+    $('statTodayCount').textContent = (s.dailyCompletions && s.dailyCompletions[today]) || 0;
+
+    // Weekly bar chart
+    const chart = $('barChart');
+    chart.innerHTML = '';
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    let maxVal = 1;
+    const weekData = [];
+
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now); d.setDate(d.getDate() - i);
+      const key = d.toISOString().split('T')[0];
+      const val = (s.dailyCompletions && s.dailyCompletions[key]) || 0;
+      weekData.push({ label: dayNames[d.getDay()], val, isToday: i === 0 });
+      if (val > maxVal) maxVal = val;
+    }
+
+    weekData.forEach(d => {
+      const col = document.createElement('div');
+      col.className = 'bar-col';
+      const h = Math.max(2, (d.val / maxVal) * 60);
+      col.innerHTML = `<div class="bar-fill" style="height:${h}px;${d.isToday ? 'opacity:1' : 'opacity:0.6'}"></div><span class="bar-label">${d.label}</span>`;
+      chart.appendChild(col);
+    });
+
+    // Motivational message
+    const todayCount = (s.dailyCompletions && s.dailyCompletions[today]) || 0;
+    const messages = [
+      todayCount === 0 ? 'Start your day strong — complete a task.' :
+      todayCount < 3 ? `You completed ${todayCount} task${todayCount > 1 ? 's' : ''} today. Keep it up.` :
+      todayCount < 6 ? `${todayCount} tasks done today — you are on a roll.` :
+      `${todayCount} tasks crushed today. Incredible work.`
+    ];
+    $('motivationalMsg').textContent = messages[0];
   }
 
+  // ─── Pomodoro Timer ─────────────────────────────────────────────
+  const CIRCUMFERENCE = 2 * Math.PI * 90; // 565.48
+
+  document.querySelectorAll('.timer-mode').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.timer-mode').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      resetTimer(parseInt(btn.dataset.minutes));
+    });
+  });
+
+  $('timerStartBtn').addEventListener('click', () => {
+    if (timerRunning) pauseTimer();
+    else startTimer();
+  });
+
+  $('timerResetBtn').addEventListener('click', () => {
+    const active = document.querySelector('.timer-mode.active');
+    resetTimer(parseInt(active.dataset.minutes));
+  });
+
+  function startTimer() {
+    timerRunning = true;
+    $('timerStartBtn').textContent = 'Pause';
+    timerInterval = setInterval(() => {
+      timerSeconds--;
+      if (timerSeconds <= 0) {
+        clearInterval(timerInterval);
+        timerRunning = false;
+        $('timerStartBtn').textContent = 'Start';
+        pomodoroSessions++;
+        $('timerSessions').textContent = `${pomodoroSessions} session${pomodoroSessions > 1 ? 's' : ''} completed`;
+        gainXP(15); // XP for completing a focus session
+        if (appData.settings.soundEnabled !== false) playSound();
+        window.api.showNotification({ title: 'Timer Done', body: 'Take a break or start another session.' });
+        scheduleSave();
+      }
+      updateTimerDisplay();
+    }, 1000);
+  }
+
+  function pauseTimer() {
+    clearInterval(timerInterval);
+    timerRunning = false;
+    $('timerStartBtn').textContent = 'Start';
+  }
+
+  function resetTimer(minutes) {
+    clearInterval(timerInterval);
+    timerRunning = false;
+    timerSeconds = minutes * 60;
+    timerTotal = minutes * 60;
+    $('timerStartBtn').textContent = 'Start';
+    updateTimerDisplay();
+  }
+
+  function updateTimerDisplay() {
+    const m = Math.floor(timerSeconds / 60).toString().padStart(2, '0');
+    const s = (timerSeconds % 60).toString().padStart(2, '0');
+    $('timerTime').textContent = `${m}:${s}`;
+    const pct = timerSeconds / timerTotal;
+    $('timerRingFill').style.strokeDashoffset = CIRCUMFERENCE * (1 - pct);
+  }
+
+  updateTimerDisplay();
+
+  // ─── Settings ───────────────────────────────────────────────────
+  function loadSettingsUI() {
+    $('weatherCityInput').value = appData.settings.weatherCity || '';
+    $('discordWebhookInput').value = appData.settings.discordWebhook || '';
+
+    const theme = appData.settings.theme || 'dark';
+    $('themeDarkBtn').classList.toggle('active', theme === 'dark');
+    $('themeLightBtn').classList.toggle('active', theme === 'light');
+
+    applySoundToggle(appData.settings.soundEnabled !== false);
+  }
+
+  $('themeDarkBtn').addEventListener('click', () => setTheme('dark'));
+  $('themeLightBtn').addEventListener('click', () => setTheme('light'));
+
+  function setTheme(t) {
+    appData.settings.theme = t;
+    applyTheme(t);
+    $('themeDarkBtn').classList.toggle('active', t === 'dark');
+    $('themeLightBtn').classList.toggle('active', t === 'light');
+    scheduleSave();
+  }
+
+  function applyTheme(t) { document.documentElement.setAttribute('data-theme', t); }
+
+  $('soundToggle').addEventListener('click', () => {
+    const on = !appData.settings.soundEnabled;
+    appData.settings.soundEnabled = on;
+    applySoundToggle(on);
+    scheduleSave();
+  });
+
+  function applySoundToggle(on) {
+    appData.settings.soundEnabled = on;
+    $('soundToggle').classList.toggle('on', on);
+  }
+
+  $('saveWeatherBtn').addEventListener('click', () => {
+    appData.settings.weatherCity = $('weatherCityInput').value.trim();
+    loadWeather();
+    scheduleSave();
+  });
+
+  $('saveWebhookBtn').addEventListener('click', () => {
+    appData.settings.discordWebhook = $('discordWebhookInput').value.trim();
+    scheduleSave();
+  });
+
+  $('testWebhookBtn').addEventListener('click', async () => {
+    const url = $('discordWebhookInput').value.trim();
+    if (!url) return;
+    const ok = await window.api.sendDiscordWebhook({ webhookUrl: url, content: 'Reminder Widget connected successfully.' });
+    $('testWebhookBtn').textContent = ok ? 'Sent' : 'Failed';
+    setTimeout(() => { $('testWebhookBtn').textContent = 'Test'; }, 2000);
+  });
+
+  $('exportBtn').addEventListener('click', () => window.api.exportBackup());
+
+  // ─── Weather ────────────────────────────────────────────────────
+  async function loadWeather() {
+    const city = appData.settings.weatherCity;
+    if (!city) { $('weatherBadge').textContent = ''; return; }
+    const w = await window.api.fetchWeather(city);
+    if (w) {
+      $('weatherBadge').textContent = `${w.temp}°F · ${w.desc}`;
+    }
+  }
+
+  // ─── Helpers ────────────────────────────────────────────────────
+  function todayStr() { return new Date().toISOString().split('T')[0]; }
+  function esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
   function scheduleSave() {
     clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(() => {
-      window.api.saveReminders(reminders);
-    }, 300);
+    saveTimeout = setTimeout(() => window.api.saveData(appData), 300);
   }
 })();
