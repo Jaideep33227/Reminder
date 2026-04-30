@@ -218,6 +218,7 @@ body {
   background: var(--bg-primary); color: var(--text-secondary);
 }
 .meta-tag.due-soon { color: var(--danger); border: 1px solid var(--danger); background: var(--high-bg); }
+.meta-tag.countdown-tag { background: var(--high-bg); color: var(--danger); font-weight: 600; border: 1px solid var(--danger); }
 .priority-tag.high { background: var(--high-bg); color: var(--danger); }
 .priority-tag.low { background: var(--low-bg); color: var(--success); }
 
@@ -364,6 +365,69 @@ body {
 
 /* ─── Animations ─────────────────────────────────────────────────── */
 @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ─── Undo Toast ─────────────────────────────────────────────────── */
+.undo-toast {
+  position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%) translateY(20px);
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 8px 16px; display: flex; align-items: center; gap: 12px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4); opacity: 0; pointer-events: none;
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); z-index: 100;
+}
+.undo-toast.visible { transform: translateX(-50%) translateY(0); opacity: 1; pointer-events: auto; }
+.undo-toast span { font-size: 11px; color: var(--text); }
+.undo-toast button {
+  background: var(--accent); color: white; border: none; padding: 4px 12px;
+  border-radius: var(--radius-sm); font-size: 11px; cursor: pointer;
+  transition: filter 0.2s;
+}
+.undo-toast button:hover { filter: brightness(1.2); }
+
+/* ─── Mini Mode & Focus Mode ─────────────────────────────────────── */
+body.mini-mode .xp-bar-container,
+body.mini-mode .filters-bar,
+body.mini-mode .stats-bar,
+body.mini-mode .reminder-list,
+body.mini-mode .bottom-nav,
+body.mini-mode .view-title,
+body.mini-mode .stats-dashboard,
+body.mini-mode .timer-dashboard,
+body.mini-mode .settings-dashboard {
+  display: none !important;
+}
+
+body.mini-mode {
+  height: 100vh;
+}
+
+body.focus-mode {
+  background: #000;
+}
+body.focus-mode .top-bar,
+body.focus-mode .add-section,
+body.focus-mode .filters-bar,
+body.focus-mode .stats-bar,
+body.focus-mode .group-header {
+  opacity: 0.1;
+  pointer-events: none;
+}
+body.focus-mode .reminder-item:not(.priority-high) {
+  display: none !important;
+}
+body.focus-mode .filter-tab#focusModeBtn {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  background: var(--danger);
+  border-color: var(--danger);
+  color: white;
+}
+body.focus-mode .top-bar {
+  opacity: 1;
+  pointer-events: auto;
+}
+body.focus-mode .search-wrapper {
+  opacity: 0.1; pointer-events: none;
+}
 
 /* ─── Level Up Overlay ───────────────────────────────────────────── */
 .levelup-overlay {

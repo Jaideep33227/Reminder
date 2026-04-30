@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld('api', {
   toggleAlwaysOnTop: () => ipcRenderer.invoke('toggle-always-on-top'),
   showNotification: (opts) => ipcRenderer.invoke('show-notification', opts),
   exportBackup: () => ipcRenderer.invoke('export-backup'),
+  importBackup: () => ipcRenderer.invoke('import-backup'),
+  toggleMiniMode: () => ipcRenderer.invoke('toggle-mini-mode'),
   fetchWeather: (city) => ipcRenderer.invoke('fetch-weather', city),
   sendDiscordWebhook: (opts) => ipcRenderer.invoke('send-discord-webhook', opts),
   onFocusInput: (cb) => ipcRenderer.on('focus-input', cb),

@@ -162,6 +162,20 @@ ipcMain.handle('toggle-always-on-top', () => {
   return true;
 });
 
+let isMiniMode = false;
+ipcMain.handle('toggle-mini-mode', () => {
+  if (mainWindow) {
+    isMiniMode = !isMiniMode;
+    if (isMiniMode) {
+      mainWindow.setSize(420, 100, true);
+    } else {
+      mainWindow.setSize(420, 680, true);
+    }
+    return isMiniMode;
+  }
+  return false;
+});
+
 ipcMain.handle('show-notification', (_event, { title, body }) => {
   if (Notification.isSupported()) {
     const notif = new Notification({ title, body, icon: getIconPath(), silent: true });
@@ -185,6 +199,27 @@ ipcMain.handle('export-backup', async () => {
     return true;
   }
   return false;
+});
+
+ipcMain.handle('import-backup', async () => {
+  if (!mainWindow) return null;
+  const { filePaths } = await dialog.showOpenDialog(mainWindow, {
+    title: 'Import Backup',
+    filters: [{ name: 'JSON Files', extensions: ['json'] }],
+    properties: ['openFile']
+  });
+  if (filePaths && filePaths.length > 0) {
+    try {
+      const raw = fs.readFileSync(filePaths[0], 'utf-8');
+      const parsed = JSON.parse(raw);
+      saveAppData(parsed);
+      return parsed;
+    } catch (e) {
+      console.error('Failed to import backup', e);
+      return null;
+    }
+  }
+  return null;
 });
 
 // Fetch weather from wttr.in (no API key needed)

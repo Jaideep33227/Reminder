@@ -1,4 +1,4 @@
-// Reminder Widget v2 — Renderer
+// Reminder Widget v3 — Renderer
 (function () {
   'use strict';
 
@@ -15,6 +15,10 @@
   let timerRunning = false;
   let pomodoroSessions = 0;
 
+  // Undo System
+  let pendingDeletedTask = null;
+  let deletedTaskTimeout = null;
+
   // XP constants
   const XP_PER_LEVEL = 100;
   const XP_TASK_COMPLETE = 10;
@@ -27,6 +31,7 @@
   const listEl = $('reminderList');
   const emptyState = $('emptyState');
   const statsText = $('statsText');
+  const undoToast = $('undoToast');
 
   // ─── Init ───────────────────────────────────────────────────────
   async function init() {
@@ -48,7 +53,7 @@
     input.focus();
     $('pinBtn').classList.add('active');
 
-    setInterval(checkNotifications, 60000);
+    setInterval(checkNotifications, 60000); // Check every minute
     setTimeout(checkNotifications, 3000);
   }
 
@@ -65,19 +70,40 @@
     });
   });
 
-  // ─── Window Controls ────────────────────────────────────────────
+  // ─── Window Controls & Modes ────────────────────────────────────
   $('minimizeBtn').addEventListener('click', () => window.api.minimizeWindow());
-  $('closeBtn').addEventListener('click', () => window.api.closeWindow());
+  
+  // Priority Lock on Close
+  $('closeBtn').addEventListener('click', () => {
+    const today = todayStr();
+    const hasUnfinishedHigh = appData.reminders.some(r => !r.completed && r.priority === 'high' && r.dueDate === today);
+    if (hasUnfinishedHigh) {
+      window.api.showNotification({ title: 'Priority Lock Active', body: 'Complete your high-priority tasks for today before closing!' });
+      return;
+    }
+    window.api.closeWindow();
+  });
+
   $('pinBtn').addEventListener('click', async (e) => {
     const on = await window.api.toggleAlwaysOnTop();
     e.currentTarget.classList.toggle('active', on);
   });
   window.api.onFocusInput(() => input.focus());
 
+  $('miniModeBtn').addEventListener('click', async () => {
+    const isMini = await window.api.toggleMiniMode();
+    document.body.classList.toggle('mini-mode', isMini);
+  });
+
+  $('focusModeBtn').addEventListener('click', () => {
+    document.body.classList.toggle('focus-mode');
+  });
+
   // ─── Search & Filters ───────────────────────────────────────────
   $('searchInput').addEventListener('input', (e) => { searchQuery = e.target.value.toLowerCase(); renderTasks(); });
 
   document.querySelectorAll('.filter-tab').forEach(tab => {
+    if (tab.id === 'focusModeBtn') return;
     tab.addEventListener('click', () => {
       document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
@@ -86,7 +112,7 @@
     });
   });
 
-  // ─── Add Form ───────────────────────────────────────────────────
+  // ─── Add Form & Brain Dump ──────────────────────────────────────
   $('toggleAdvancedBtn').addEventListener('click', () => {
     $('advancedPanel').classList.toggle('visible');
     $('toggleAdvancedBtn').classList.toggle('open');
@@ -96,24 +122,35 @@
     if (e.key === 'Enter') { e.preventDefault(); addReminder(); }
   });
 
-  // ─── CRUD ───────────────────────────────────────────────────────
   function addReminder() {
-    const text = input.value.trim();
-    if (!text) return;
+    const fullText = input.value.trim();
+    if (!fullText) return;
 
-    const reminder = {
-      id: Date.now().toString(36) + Math.random().toString(36).substr(2),
-      text,
-      completed: false,
-      createdAt: new Date().toISOString(),
-      dueDate: $('dateInput').value || null,
-      dueTime: $('timeInput').value || null,
-      priority: $('prioritySelect').value,
-      category: $('categorySelect').value !== 'none' ? $('categorySelect').value : null,
-      notified: false
-    };
+    // Brain Dump Mode: auto-split multiple tasks
+    const parts = fullText.split(/,| and |;/i).map(p => p.trim()).filter(Boolean);
 
-    appData.reminders.unshift(reminder);
+    parts.forEach(text => {
+      const reminder = {
+        id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+        text,
+        completed: false,
+        createdAt: new Date().toISOString(),
+        dueDate: $('dateInput').value || null,
+        dueTime: $('timeInput').value || null,
+        priority: $('prioritySelect').value,
+        category: $('categorySelect').value !== 'none' ? $('categorySelect').value : null,
+        notified: false
+      };
+      appData.reminders.unshift(reminder);
+
+      if (appData.settings.discordWebhook) {
+        window.api.sendDiscordWebhook({
+          webhookUrl: appData.settings.discordWebhook,
+          content: `New reminder: **${text}**` + (reminder.dueDate ? ` (Due: ${reminder.dueDate})` : '')
+        });
+      }
+    });
+
     input.value = '';
     $('dateInput').value = '';
     $('timeInput').value = '';
@@ -122,18 +159,11 @@
     $('advancedPanel').classList.remove('visible');
     $('toggleAdvancedBtn').classList.remove('open');
 
-    // Send to Discord if configured
-    if (appData.settings.discordWebhook) {
-      window.api.sendDiscordWebhook({
-        webhookUrl: appData.settings.discordWebhook,
-        content: `New reminder: **${text}**` + (reminder.dueDate ? ` (Due: ${reminder.dueDate})` : '')
-      });
-    }
-
     renderTasks();
     scheduleSave();
   }
 
+  // ─── CRUD & Undo System ─────────────────────────────────────────
   function toggleReminder(id) {
     const r = appData.reminders.find(x => x.id === id);
     if (!r) return;
@@ -154,10 +184,34 @@
   }
 
   function deleteReminder(id) {
-    appData.reminders = appData.reminders.filter(x => x.id !== id);
+    const index = appData.reminders.findIndex(x => x.id === id);
+    if (index === -1) return;
+
+    pendingDeletedTask = appData.reminders[index];
+    appData.reminders.splice(index, 1);
+    
     renderTasks();
     scheduleSave();
+
+    // Show Undo Toast
+    undoToast.classList.add('visible');
+    clearTimeout(deletedTaskTimeout);
+    deletedTaskTimeout = setTimeout(() => {
+      undoToast.classList.remove('visible');
+      pendingDeletedTask = null;
+    }, 5000);
   }
+
+  $('undoBtn').addEventListener('click', () => {
+    if (pendingDeletedTask) {
+      appData.reminders.unshift(pendingDeletedTask);
+      pendingDeletedTask = null;
+      undoToast.classList.remove('visible');
+      clearTimeout(deletedTaskTimeout);
+      renderTasks();
+      scheduleSave();
+    }
+  });
 
   $('clearDoneBtn').addEventListener('click', () => {
     appData.reminders = appData.reminders.filter(x => !x.completed);
@@ -207,20 +261,20 @@
     const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
     const last = appData.stats.lastActiveDate;
 
-    if (last === today) return; // already counted today
+    if (last === today) return;
 
     if (last === yesterday) {
       appData.stats.streak = (appData.stats.streak || 0) + 1;
       gainXP(XP_STREAK_BONUS * appData.stats.streak);
     } else if (last !== today) {
-      appData.stats.streak = 1; // reset
+      appData.stats.streak = 1;
     }
 
     appData.stats.lastActiveDate = today;
     scheduleSave();
   }
 
-  // ─── Notifications ──────────────────────────────────────────────
+  // ─── Notifications & Countdowns ─────────────────────────────────
   function checkNotifications() {
     const now = new Date();
     const today = todayStr();
@@ -234,7 +288,6 @@
           r.notified = true;
           triggered = true;
         }
-        // Check for missed reminders
         if (r.dueDate < today || (r.dueDate === today && r.dueTime < timeStr && !r.notified)) {
           appData.stats.missedReminders = (appData.stats.missedReminders || 0) + 1;
           r.notified = true;
@@ -246,8 +299,9 @@
     if (triggered) {
       if (appData.settings.soundEnabled !== false) playSound();
       scheduleSave();
-      renderTasks();
     }
+    // Re-render tasks every minute to update live countdown tags
+    renderTasks();
   }
 
   function playSound() {
@@ -265,9 +319,23 @@
     } catch (e) { /* silent fail */ }
   }
 
+  function getCountdownText(dueDate, dueTime) {
+    if (!dueDate || !dueTime) return null;
+    const now = new Date();
+    const target = new Date(`${dueDate}T${dueTime}`);
+    const diffMs = target - now;
+    if (diffMs <= 0) return null; // past
+    
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 60) return `${diffMins}m`;
+    const hours = Math.floor(diffMins / 60);
+    const mins = diffMins % 60;
+    if (hours < 24) return `${hours}h ${mins}m`;
+    return null;
+  }
+
   // ─── Render Tasks ───────────────────────────────────────────────
   function renderTasks() {
-    // Clear existing
     listEl.querySelectorAll('.reminder-item, .group-header').forEach(el => el.remove());
 
     let filtered = appData.reminders;
@@ -283,7 +351,6 @@
     } else {
       emptyState.classList.add('hidden');
 
-      // Smart sort: Urgent first, then Today, then Later, then Completed
       const groups = { urgent: [], today: [], later: [], done: [] };
       filtered.forEach(r => {
         if (r.completed) groups.done.push(r);
@@ -292,7 +359,6 @@
         else groups.later.push(r);
       });
 
-      // Sort within groups by priority
       const priorityOrder = { high: 0, medium: 1, low: 2 };
       const sortByPriority = (a, b) => (priorityOrder[a.priority] || 1) - (priorityOrder[b.priority] || 1);
       Object.values(groups).forEach(g => g.sort(sortByPriority));
@@ -326,13 +392,23 @@
     el.className = classes;
 
     let tags = '';
-    if (r.dueDate) {
+    
+    // Live Countdown
+    let countdownStr = null;
+    if (!r.completed) {
+      countdownStr = getCountdownText(r.dueDate, r.dueTime);
+    }
+
+    if (countdownStr) {
+      tags += `<span class="meta-tag countdown-tag">⏱️ ${countdownStr}</span>`;
+    } else if (r.dueDate) {
       const isToday = r.dueDate === todayStr();
       const overdue = r.dueDate < todayStr() && !r.completed;
       const label = overdue ? 'Overdue' : isToday ? 'Today' : r.dueDate;
       const time = r.dueTime ? ' ' + r.dueTime : '';
       tags += `<span class="meta-tag ${overdue ? 'due-soon' : ''}">${label}${time}</span>`;
     }
+    
     if (r.priority && r.priority !== 'medium') {
       tags += `<span class="meta-tag priority-tag ${r.priority}">${r.priority === 'high' ? 'High' : 'Low'}</span>`;
     }
@@ -373,12 +449,10 @@
     const today = todayStr();
     $('statTodayCount').textContent = (s.dailyCompletions && s.dailyCompletions[today]) || 0;
 
-    // Weekly bar chart
     const chart = $('barChart');
     chart.innerHTML = '';
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const now = new Date();
-    const dayOfWeek = now.getDay();
     let maxVal = 1;
     const weekData = [];
 
@@ -398,7 +472,6 @@
       chart.appendChild(col);
     });
 
-    // Motivational message
     const todayCount = (s.dailyCompletions && s.dailyCompletions[today]) || 0;
     const messages = [
       todayCount === 0 ? 'Start your day strong — complete a task.' :
@@ -410,7 +483,7 @@
   }
 
   // ─── Pomodoro Timer ─────────────────────────────────────────────
-  const CIRCUMFERENCE = 2 * Math.PI * 90; // 565.48
+  const CIRCUMFERENCE = 2 * Math.PI * 90;
 
   document.querySelectorAll('.timer-mode').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -441,7 +514,7 @@
         $('timerStartBtn').textContent = 'Start';
         pomodoroSessions++;
         $('timerSessions').textContent = `${pomodoroSessions} session${pomodoroSessions > 1 ? 's' : ''} completed`;
-        gainXP(15); // XP for completing a focus session
+        gainXP(15);
         if (appData.settings.soundEnabled !== false) playSound();
         window.api.showNotification({ title: 'Timer Done', body: 'Take a break or start another session.' });
         scheduleSave();
@@ -532,6 +605,17 @@
   });
 
   $('exportBtn').addEventListener('click', () => window.api.exportBackup());
+  
+  $('importBtn').addEventListener('click', async () => {
+    const importedData = await window.api.importBackup();
+    if (importedData) {
+      appData = importedData;
+      renderTasks();
+      renderStats();
+      loadSettingsUI();
+      window.api.showNotification({ title: 'Success', body: 'Backup imported successfully.' });
+    }
+  });
 
   // ─── Weather ────────────────────────────────────────────────────
   async function loadWeather() {
