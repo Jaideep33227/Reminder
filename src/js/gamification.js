@@ -3,7 +3,7 @@ import { appData, scheduleSave, todayStr } from './state.js';
 import { playSound } from './audio.js';
 import { renderXpBar } from './ui.js';
 
-const XP_PER_LEVEL = 100;
+export const XP_PER_LEVEL = 100;
 export const XP_EASY = 5;
 export const XP_MEDIUM = 10;
 export const XP_HARD = 20;
