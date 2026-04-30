@@ -1,12 +1,14 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
-  loadReminders: () => ipcRenderer.invoke('load-reminders'),
-  saveReminders: (reminders) => ipcRenderer.invoke('save-reminders', reminders),
+  loadData: () => ipcRenderer.invoke('load-data'),
+  saveData: (data) => ipcRenderer.invoke('save-data', data),
   minimizeWindow: () => ipcRenderer.invoke('minimize-window'),
   closeWindow: () => ipcRenderer.invoke('close-window'),
   toggleAlwaysOnTop: () => ipcRenderer.invoke('toggle-always-on-top'),
-  showNotification: (options) => ipcRenderer.invoke('show-notification', options),
+  showNotification: (opts) => ipcRenderer.invoke('show-notification', opts),
   exportBackup: () => ipcRenderer.invoke('export-backup'),
-  onFocusInput: (callback) => ipcRenderer.on('focus-input', callback),
+  fetchWeather: (city) => ipcRenderer.invoke('fetch-weather', city),
+  sendDiscordWebhook: (opts) => ipcRenderer.invoke('send-discord-webhook', opts),
+  onFocusInput: (cb) => ipcRenderer.on('focus-input', cb),
 });

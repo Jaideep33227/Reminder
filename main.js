@@ -1,10 +1,29 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage, globalShortcut, Notification, dialog } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage, globalShortcut, Notification, dialog, net } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
 // ─── Data Persistence ───────────────────────────────────────────────
 const DATA_DIR = path.join(app.getPath('userData'), 'data');
-const DATA_FILE = path.join(DATA_DIR, 'reminders.json');
+const DATA_FILE = path.join(DATA_DIR, 'appdata.json');
+
+const DEFAULT_DATA = {
+  reminders: [],
+  stats: {
+    xp: 0,
+    level: 1,
+    streak: 0,
+    lastActiveDate: null,
+    totalCompleted: 0,
+    dailyCompletions: {},
+    missedReminders: 0
+  },
+  settings: {
+    discordWebhook: '',
+    weatherCity: '',
+    soundEnabled: true,
+    theme: 'dark'
+  }
+};
 
 function ensureDataDir() {
   if (!fs.existsSync(DATA_DIR)) {
@@ -12,25 +31,31 @@ function ensureDataDir() {
   }
 }
 
-function loadReminders() {
+function loadAppData() {
   ensureDataDir();
   try {
     if (fs.existsSync(DATA_FILE)) {
       const raw = fs.readFileSync(DATA_FILE, 'utf-8');
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      // Merge with defaults so new fields are always present
+      return {
+        reminders: parsed.reminders || [],
+        stats: { ...DEFAULT_DATA.stats, ...parsed.stats },
+        settings: { ...DEFAULT_DATA.settings, ...parsed.settings }
+      };
     }
   } catch (err) {
-    console.error('Failed to load reminders:', err);
+    console.error('Failed to load app data:', err);
   }
-  return [];
+  return JSON.parse(JSON.stringify(DEFAULT_DATA));
 }
 
-function saveReminders(reminders) {
+function saveAppData(data) {
   ensureDataDir();
   try {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(reminders, null, 2), 'utf-8');
+    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf-8');
   } catch (err) {
-    console.error('Failed to save reminders:', err);
+    console.error('Failed to save app data:', err);
   }
 }
 
@@ -45,9 +70,8 @@ function getIconPath() {
 
 function createWindow() {
   const { width: screenW, height: screenH } = screen.getPrimaryDisplay().workAreaSize;
-
-  const winWidth = 420; // Slightly wider for new features
-  const winHeight = 650; // Taller for more content
+  const winWidth = 420;
+  const winHeight = 680;
   const margin = 16;
 
   mainWindow = new BrowserWindow({
@@ -98,59 +122,36 @@ function createTray() {
   }
 
   tray = new Tray(trayIcon);
-  tray.setToolTip('Smart Reminder Widget');
+  tray.setToolTip('Reminder Widget');
 
   const contextMenu = Menu.buildFromTemplate([
     {
       label: 'Show Widget',
       click: () => {
-        if (mainWindow) {
-          mainWindow.show();
-          mainWindow.focus();
-        }
+        if (mainWindow) { mainWindow.show(); mainWindow.focus(); }
       },
     },
     { type: 'separator' },
     {
       label: 'Quit',
-      click: () => {
-        isQuitting = true;
-        app.quit();
-      },
+      click: () => { isQuitting = true; app.quit(); },
     },
   ]);
 
   tray.setContextMenu(contextMenu);
-
   tray.on('click', () => {
     if (mainWindow) {
-      if (mainWindow.isVisible()) {
-        mainWindow.focus();
-      } else {
-        mainWindow.show();
-        mainWindow.focus();
-      }
+      if (mainWindow.isVisible()) mainWindow.focus();
+      else { mainWindow.show(); mainWindow.focus(); }
     }
   });
 }
 
 // ─── IPC Handlers ───────────────────────────────────────────────────
-ipcMain.handle('load-reminders', () => {
-  return loadReminders();
-});
-
-ipcMain.handle('save-reminders', (_event, reminders) => {
-  saveReminders(reminders);
-  return true;
-});
-
-ipcMain.handle('minimize-window', () => {
-  if (mainWindow) mainWindow.hide();
-});
-
-ipcMain.handle('close-window', () => {
-  if (mainWindow) mainWindow.hide();
-});
+ipcMain.handle('load-data', () => loadAppData());
+ipcMain.handle('save-data', (_event, data) => { saveAppData(data); return true; });
+ipcMain.handle('minimize-window', () => { if (mainWindow) mainWindow.hide(); });
+ipcMain.handle('close-window', () => { if (mainWindow) mainWindow.hide(); });
 
 ipcMain.handle('toggle-always-on-top', () => {
   if (mainWindow) {
@@ -161,41 +162,79 @@ ipcMain.handle('toggle-always-on-top', () => {
   return true;
 });
 
-// Notifications
 ipcMain.handle('show-notification', (_event, { title, body }) => {
   if (Notification.isSupported()) {
-    const notif = new Notification({
-      title: title,
-      body: body,
-      icon: getIconPath(),
-      silent: true // We'll play custom sound in renderer
-    });
+    const notif = new Notification({ title, body, icon: getIconPath(), silent: true });
     notif.show();
-    
     notif.on('click', () => {
-      if (mainWindow) {
-        mainWindow.show();
-        mainWindow.focus();
-      }
+      if (mainWindow) { mainWindow.show(); mainWindow.focus(); }
     });
   }
 });
 
-// Export Backup
 ipcMain.handle('export-backup', async () => {
   if (!mainWindow) return false;
   const { filePath } = await dialog.showSaveDialog(mainWindow, {
-    title: 'Export Reminders Backup',
+    title: 'Export Backup',
     defaultPath: path.join(app.getPath('documents'), 'reminders-backup.json'),
     filters: [{ name: 'JSON Files', extensions: ['json'] }]
   });
-  
   if (filePath) {
-    const data = loadReminders();
+    const data = loadAppData();
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
     return true;
   }
   return false;
+});
+
+// Fetch weather from wttr.in (no API key needed)
+ipcMain.handle('fetch-weather', async (_event, city) => {
+  if (!city) return null;
+  return new Promise((resolve) => {
+    const url = `https://wttr.in/${encodeURIComponent(city)}?format=j1`;
+    const request = net.request(url);
+    let body = '';
+    request.on('response', (response) => {
+      response.on('data', (chunk) => { body += chunk.toString(); });
+      response.on('end', () => {
+        try {
+          const json = JSON.parse(body);
+          const current = json.current_condition[0];
+          resolve({
+            temp: current.temp_F,
+            tempC: current.temp_C,
+            desc: current.weatherDesc[0].value,
+            humidity: current.humidity,
+            feelsLike: current.FeelsLikeF
+          });
+        } catch {
+          resolve(null);
+        }
+      });
+    });
+    request.on('error', () => resolve(null));
+    request.end();
+  });
+});
+
+// Send Discord webhook
+ipcMain.handle('send-discord-webhook', async (_event, { webhookUrl, content }) => {
+  if (!webhookUrl) return false;
+  return new Promise((resolve) => {
+    const url = new URL(webhookUrl);
+    const postData = JSON.stringify({ content });
+    const request = net.request({
+      method: 'POST',
+      url: webhookUrl,
+    });
+    request.setHeader('Content-Type', 'application/json');
+    request.on('response', (response) => {
+      resolve(response.statusCode >= 200 && response.statusCode < 300);
+    });
+    request.on('error', () => resolve(false));
+    request.write(postData);
+    request.end();
+  });
 });
 
 // ─── App Lifecycle ──────────────────────────────────────────────────
@@ -205,33 +244,17 @@ app.whenReady().then(() => {
 
   globalShortcut.register('Ctrl+Shift+R', () => {
     if (mainWindow) {
-      if (mainWindow.isVisible()) {
-        mainWindow.focus();
-      } else {
-        mainWindow.show();
-        mainWindow.focus();
-      }
+      if (mainWindow.isVisible()) mainWindow.focus();
+      else { mainWindow.show(); mainWindow.focus(); }
       mainWindow.webContents.send('focus-input');
     }
   });
 });
 
-app.on('before-quit', () => {
-  isQuitting = true;
-});
-
-app.on('window-all-closed', () => {
-  // Don't quit — we live in the tray
-});
-
+app.on('before-quit', () => { isQuitting = true; });
+app.on('window-all-closed', () => { /* stay in tray */ });
 app.on('activate', () => {
-  if (mainWindow === null) {
-    createWindow();
-  } else {
-    mainWindow.show();
-  }
+  if (mainWindow === null) createWindow();
+  else mainWindow.show();
 });
-
-app.on('will-quit', () => {
-  globalShortcut.unregisterAll();
-});
+app.on('will-quit', () => { globalShortcut.unregisterAll(); });

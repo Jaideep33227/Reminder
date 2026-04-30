@@ -3,81 +3,62 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Smart Reminder Widget</title>
-  <!-- Font: System stack with Inter priority -->
+  <title>Reminder Widget</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <!-- Custom Title Bar -->
-  <div class="titlebar" id="titlebar">
+  <!-- Title Bar -->
+  <div class="titlebar">
     <div class="titlebar-drag">
       <svg class="titlebar-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
         <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
       </svg>
-      <span class="titlebar-title">Smart Reminders</span>
+      <span class="titlebar-title">Reminder Widget</span>
+      <span class="weather-badge" id="weatherBadge" title="Weather"></span>
     </div>
     <div class="titlebar-controls">
-      <button class="titlebar-btn" id="themeBtn" title="Toggle Theme">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      <button class="titlebar-btn pin-btn active" id="pinBtn" title="Pin on top">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="17" x2="12" y2="22"></line><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path></svg>
       </button>
-      <button class="titlebar-btn" id="backupBtn" title="Export Backup">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-      </button>
-      <button class="titlebar-btn pin-btn" id="pinBtn" title="Toggle always on top">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="12" y1="17" x2="12" y2="22"></line>
-          <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path>
-        </svg>
-      </button>
-      <button class="titlebar-btn minimize-btn" id="minimizeBtn" title="Minimize to tray">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-          <line x1="5" y1="12" x2="19" y2="12"></line>
-        </svg>
+      <button class="titlebar-btn minimize-btn" id="minimizeBtn" title="Minimize">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
       </button>
       <button class="titlebar-btn close-btn" id="closeBtn" title="Close to tray">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-          <line x1="18" y1="6" x2="6" y2="18"></line>
-          <line x1="6" y1="6" x2="18" y2="18"></line>
-        </svg>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
       </button>
     </div>
   </div>
 
-  <!-- Main Content -->
-  <div class="container">
-    <!-- Top Action Bar (Search) -->
+  <!-- ═══════ VIEW: TASKS ═══════ -->
+  <div class="view active" id="viewTasks">
+    <!-- XP Bar -->
+    <div class="xp-bar-container">
+      <div class="xp-info">
+        <span class="level-badge" id="levelBadge">Lv 1</span>
+        <span class="xp-text" id="xpText">0 / 100 XP</span>
+        <span class="streak-badge" id="streakBadge"></span>
+      </div>
+      <div class="xp-track"><div class="xp-fill" id="xpFill" style="width:0%"></div></div>
+    </div>
+
+    <!-- Search -->
     <div class="top-bar">
       <div class="search-wrapper">
-        <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
         <input type="text" id="searchInput" placeholder="Search reminders..." />
-      </div>
-      <div class="sound-toggle" id="soundBtn" title="Toggle Sound">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="sound-icon-on"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
       </div>
     </div>
 
-    <!-- Quick Add + Advanced Options -->
+    <!-- Quick Add -->
     <div class="add-section">
       <div class="input-wrapper">
-        <svg class="input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="12" y1="5" x2="12" y2="19"></line>
-          <line x1="5" y1="12" x2="19" y2="12"></line>
-        </svg>
-        <input
-          type="text"
-          id="reminderInput"
-          class="reminder-input"
-          placeholder="Add task... (gym at 6pm)"
-          autocomplete="off"
-          spellcheck="false"
-        />
-        <button id="toggleAdvancedBtn" class="toggle-advanced-btn" title="Advanced Options">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        <svg class="input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        <input type="text" id="reminderInput" class="reminder-input" placeholder="Add a task..." autocomplete="off" spellcheck="false" />
+        <button id="toggleAdvancedBtn" class="toggle-advanced-btn" title="Options">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
         </button>
       </div>
-
-      <!-- Advanced Form Panel (Hidden by default) -->
       <div class="advanced-panel" id="advancedPanel">
         <div class="form-row">
           <input type="date" id="dateInput" class="form-control" />
@@ -85,9 +66,9 @@
         </div>
         <div class="form-row">
           <select id="prioritySelect" class="form-control">
-            <option value="low">Low Priority</option>
-            <option value="medium" selected>Medium Priority</option>
-            <option value="high">High Priority</option>
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
           </select>
           <select id="categorySelect" class="form-control">
             <option value="none">No Category</option>
@@ -99,42 +80,173 @@
       </div>
     </div>
 
-    <!-- Filters Tabs -->
+    <!-- Filters -->
     <div class="filters-bar">
       <button class="filter-tab active" data-filter="all">All</button>
+      <button class="filter-tab" data-filter="urgent">Urgent</button>
       <button class="filter-tab" data-filter="today">Today</button>
-      <button class="filter-tab" data-filter="high">High Priority</button>
-      <button class="filter-tab" data-filter="work">Work</button>
+      <button class="filter-tab" data-filter="high">High</button>
     </div>
 
-    <!-- Stats Bar -->
+    <!-- Stats summary -->
     <div class="stats-bar">
-      <span id="statsText" class="stats-text">0 reminders</span>
-      <button class="clear-done-btn" id="clearDoneBtn" title="Clear completed">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="3 6 5 6 21 6"></polyline>
-          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-        </svg>
-        Clear done
-      </button>
+      <span id="statsText" class="stats-text">0 tasks</span>
+      <button class="clear-done-btn" id="clearDoneBtn" title="Clear completed">Clear done</button>
     </div>
 
     <!-- Reminder List -->
     <div class="reminder-list" id="reminderList">
-      <!-- Reminders will be rendered here -->
       <div class="empty-state" id="emptyState">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" opacity="0.3">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-          <polyline points="14 2 14 8 20 8"></polyline>
-          <line x1="16" y1="13" x2="8" y2="13"></line>
-          <line x1="16" y1="17" x2="8" y2="17"></line>
-          <polyline points="10 9 9 9 8 9"></polyline>
-        </svg>
-        <p>No reminders found</p>
-        <span>Add a new task above</span>
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+        <p>No tasks yet</p>
+        <span>Add one above to get started</span>
       </div>
     </div>
   </div>
+
+  <!-- ═══════ VIEW: STATS ═══════ -->
+  <div class="view" id="viewStats">
+    <div class="stats-dashboard">
+      <h2 class="view-title">Productivity</h2>
+
+      <!-- Level Card -->
+      <div class="stat-card level-card">
+        <div class="stat-card-header">
+          <span class="stat-label">Level</span>
+          <span class="stat-value" id="statLevel">1</span>
+        </div>
+        <div class="xp-track large"><div class="xp-fill" id="statXpFill" style="width:0%"></div></div>
+        <span class="stat-sub" id="statXpSub">0 / 100 XP</span>
+      </div>
+
+      <!-- Row: Streak + Completed Today -->
+      <div class="stat-row">
+        <div class="stat-card">
+          <span class="stat-value big" id="statStreak">0</span>
+          <span class="stat-label">Day Streak</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value big" id="statTodayCount">0</span>
+          <span class="stat-label">Done Today</span>
+        </div>
+      </div>
+
+      <!-- Row: Total + Missed -->
+      <div class="stat-row">
+        <div class="stat-card">
+          <span class="stat-value big" id="statTotalCompleted">0</span>
+          <span class="stat-label">Total Completed</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value big missed" id="statMissed">0</span>
+          <span class="stat-label">Missed</span>
+        </div>
+      </div>
+
+      <!-- Weekly Chart -->
+      <div class="stat-card chart-card">
+        <span class="stat-label">This Week</span>
+        <div class="bar-chart" id="barChart"></div>
+      </div>
+
+      <!-- Motivational Message -->
+      <div class="motivational-msg" id="motivationalMsg"></div>
+    </div>
+  </div>
+
+  <!-- ═══════ VIEW: TIMER (Pomodoro) ═══════ -->
+  <div class="view" id="viewTimer">
+    <div class="timer-dashboard">
+      <h2 class="view-title">Focus Timer</h2>
+
+      <div class="timer-mode-tabs">
+        <button class="timer-mode active" data-minutes="25">Focus</button>
+        <button class="timer-mode" data-minutes="5">Short Break</button>
+        <button class="timer-mode" data-minutes="15">Long Break</button>
+      </div>
+
+      <div class="timer-display">
+        <svg class="timer-ring" viewBox="0 0 200 200">
+          <circle class="timer-ring-bg" cx="100" cy="100" r="90" />
+          <circle class="timer-ring-fill" id="timerRingFill" cx="100" cy="100" r="90" />
+        </svg>
+        <span class="timer-time" id="timerTime">25:00</span>
+      </div>
+
+      <div class="timer-controls">
+        <button class="timer-btn" id="timerStartBtn">Start</button>
+        <button class="timer-btn secondary" id="timerResetBtn">Reset</button>
+      </div>
+
+      <div class="timer-sessions">
+        <span id="timerSessions">0 sessions completed</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ VIEW: SETTINGS ═══════ -->
+  <div class="view" id="viewSettings">
+    <div class="settings-dashboard">
+      <h2 class="view-title">Settings</h2>
+
+      <div class="settings-group">
+        <label class="settings-label">Theme</label>
+        <div class="settings-row">
+          <button class="theme-btn" id="themeDarkBtn" data-theme="dark">Dark</button>
+          <button class="theme-btn" id="themeLightBtn" data-theme="light">Light</button>
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <label class="settings-label">Sound Notifications</label>
+        <div class="toggle-switch" id="soundToggle">
+          <div class="toggle-knob"></div>
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <label class="settings-label">Weather City</label>
+        <input type="text" id="weatherCityInput" class="settings-input" placeholder="e.g. New York" />
+        <button class="settings-save-btn" id="saveWeatherBtn">Save</button>
+      </div>
+
+      <div class="settings-group">
+        <label class="settings-label">Discord Webhook</label>
+        <input type="text" id="discordWebhookInput" class="settings-input" placeholder="https://discord.com/api/webhooks/..." />
+        <button class="settings-save-btn" id="saveWebhookBtn">Save</button>
+        <button class="settings-save-btn secondary" id="testWebhookBtn">Test</button>
+      </div>
+
+      <div class="settings-group">
+        <label class="settings-label">Data</label>
+        <button class="settings-save-btn" id="exportBtn">Export Backup</button>
+      </div>
+
+      <div class="settings-footer">
+        <span>Reminder Widget v2.0</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ BOTTOM NAV ═══════ -->
+  <nav class="bottom-nav">
+    <button class="nav-btn active" data-view="viewTasks" title="Tasks">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+      <span>Tasks</span>
+    </button>
+    <button class="nav-btn" data-view="viewStats" title="Stats">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+      <span>Stats</span>
+    </button>
+    <button class="nav-btn" data-view="viewTimer" title="Timer">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+      <span>Timer</span>
+    </button>
+    <button class="nav-btn" data-view="viewSettings" title="Settings">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+      <span>Settings</span>
+    </button>
+  </nav>
 
   <script src="renderer.js"></script>
 </body>
