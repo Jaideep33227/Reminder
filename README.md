@@ -37,7 +37,7 @@ A lightweight, always-on-top desktop reminder assistant for Windows. Built with 
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/reminder-widget.git
+git clone https://github.com/Jaideep33227/reminder-widget.git
 cd reminder-widget
 
 # Install dependencies
@@ -117,26 +117,6 @@ Reminders are stored at:
 
 ---
 
-## 📋 GitHub Setup
-
-```bash
-# Initialize git
-git init
-
-# Add all files
-git add .
-
-# Initial commit
-git commit -m "✨ Initial commit — Reminder Widget v1.0.0"
-
-# Add your remote
-git remote add origin https://github.com/YOUR_USERNAME/reminder-widget.git
-
-# Push
-git push -u origin main
-```
-
----
 
 ## 📄 License
 
