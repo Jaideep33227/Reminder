@@ -37,12 +37,23 @@ function loadAppData() {
     if (fs.existsSync(DATA_FILE)) {
       const raw = fs.readFileSync(DATA_FILE, 'utf-8');
       const parsed = JSON.parse(raw);
-      // Merge with defaults so new fields are always present
-      return {
-        reminders: parsed.reminders || [],
-        stats: { ...DEFAULT_DATA.stats, ...parsed.stats },
-        settings: { ...DEFAULT_DATA.settings, ...parsed.settings }
+      
+      // Deep Schema Validation
+      const safeData = {
+        reminders: Array.isArray(parsed.reminders) ? parsed.reminders : [],
+        stats: { ...DEFAULT_DATA.stats, ...(typeof parsed.stats === 'object' && parsed.stats !== null ? parsed.stats : {}) },
+        settings: { ...DEFAULT_DATA.settings, ...(typeof parsed.settings === 'object' && parsed.settings !== null ? parsed.settings : {}) }
       };
+      
+      // Enforce nested structure safety
+      if (typeof safeData.stats.dailyCompletions !== 'object' || safeData.stats.dailyCompletions === null) {
+        safeData.stats.dailyCompletions = {};
+      }
+      if (!Array.isArray(safeData.stats.recentCompletions)) {
+        safeData.stats.recentCompletions = [];
+      }
+      
+      return safeData;
     }
   } catch (err) {
     console.error('Failed to load app data:', err);
@@ -81,6 +92,7 @@ function createWindow() {
     y: screenH - winHeight - margin,
     frame: false,
     transparent: true,
+    backgroundMaterial: 'acrylic',
     resizable: true,
     alwaysOnTop: true,
     skipTaskbar: false,

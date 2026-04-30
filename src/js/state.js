@@ -4,6 +4,19 @@ export let appData = { reminders: [], stats: {}, settings: {} };
 let saveTimeout = null;
 
 export function setAppData(data) {
+  // Garbage Collection: Remove completed tasks older than 30 days
+  const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  
+  if (data && Array.isArray(data.reminders)) {
+    data.reminders = data.reminders.filter(r => {
+      if (!r.completed) return true;
+      if (!r.createdAt) return true;
+      // Keep if created within 30 days
+      return (now - r.createdAt) < THIRTY_DAYS_MS;
+    });
+  }
+
   appData = data;
 }
 
