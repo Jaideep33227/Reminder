@@ -442,3 +442,40 @@ body.focus-mode .search-wrapper {
 .levelup-card h2 { font-size: 22px; color: var(--accent); margin-bottom: 6px; }
 .levelup-card p { color: var(--text-secondary); font-size: 13px; }
 @keyframes scaleIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+/* ─── Gamification Locks ─────────────────────────────────────────── */
+.locked-feature-container {
+  position: relative;
+}
+.locked-feature-container.is-locked > *:not(.locked-overlay) {
+  opacity: 0.3;
+  pointer-events: none;
+  filter: grayscale(1);
+}
+.locked-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(var(--bg-card), 0.5);
+  border-radius: var(--radius-md);
+  z-index: 10;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+.locked-feature-container.is-locked .locked-overlay {
+  opacity: 1;
+  pointer-events: auto;
+}
+.locked-overlay span {
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  border: 1px solid var(--border);
+}

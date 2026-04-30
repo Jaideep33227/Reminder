@@ -137,22 +137,29 @@
         </div>
       </div>
 
-      <!-- Row: Total + Missed -->
-      <div class="stat-row">
-        <div class="stat-card">
-          <span class="stat-value big" id="statTotalCompleted">0</span>
-          <span class="stat-label">Total Completed</span>
+      <!-- Advanced Stats (Locked) -->
+      <div id="advancedStatsContainer" class="locked-feature-container">
+        <!-- Row: Total + Missed -->
+        <div class="stat-row">
+          <div class="stat-card">
+            <span class="stat-value big" id="statTotalCompleted">0</span>
+            <span class="stat-label">Total Completed</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-value big missed" id="statMissed">0</span>
+            <span class="stat-label">Missed</span>
+          </div>
         </div>
-        <div class="stat-card">
-          <span class="stat-value big missed" id="statMissed">0</span>
-          <span class="stat-label">Missed</span>
-        </div>
-      </div>
 
-      <!-- Weekly Chart -->
-      <div class="stat-card chart-card">
-        <span class="stat-label">This Week</span>
-        <div class="bar-chart" id="barChart"></div>
+        <!-- Weekly Chart -->
+        <div class="stat-card chart-card">
+          <span class="stat-label">This Week</span>
+          <div class="bar-chart" id="barChart"></div>
+        </div>
+        
+        <div class="locked-overlay" id="statsLockOverlay">
+          <span>🔒 Lv 10 Required for Advanced Stats</span>
+        </div>
       </div>
 
       <!-- Motivational Message -->
@@ -195,18 +202,24 @@
     <div class="settings-dashboard">
       <h2 class="view-title">Settings</h2>
 
-      <div class="settings-group">
+      <div class="settings-group locked-feature-container" id="themeContainer">
         <label class="settings-label">Theme</label>
         <div class="settings-row">
           <button class="theme-btn" id="themeDarkBtn" data-theme="dark">Dark</button>
           <button class="theme-btn" id="themeLightBtn" data-theme="light">Light</button>
         </div>
+        <div class="locked-overlay" id="themeLockOverlay">
+          <span>🔒 Lv 3 Required</span>
+        </div>
       </div>
 
-      <div class="settings-group">
+      <div class="settings-group locked-feature-container" id="soundContainer">
         <label class="settings-label">Sound Notifications</label>
         <div class="toggle-switch" id="soundToggle">
           <div class="toggle-knob"></div>
+        </div>
+        <div class="locked-overlay" id="soundLockOverlay">
+          <span>🔒 Lv 5 Required</span>
         </div>
       </div>
 

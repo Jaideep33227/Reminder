@@ -1,4 +1,4 @@
-// Reminder Widget v3 — Renderer
+// Reminder Widget v4 — Renderer
 (function () {
   'use strict';
 
@@ -21,9 +21,16 @@
 
   // XP constants
   const XP_PER_LEVEL = 100;
-  const XP_TASK_COMPLETE = 10;
-  const XP_HIGH_PRIORITY = 20;
-  const XP_STREAK_BONUS = 5;
+  const XP_EASY = 5;
+  const XP_MEDIUM = 10;
+  const XP_HARD = 20;
+  
+  const XP_EARLY_BONUS = 5;
+  const XP_LATE_BONUS = 2;
+  const XP_STREAK_3 = 15;
+  const XP_STREAK_7 = 50;
+  const XP_COMBO_BONUS = 15;
+  const COMBO_TIME_WINDOW = 10 * 60 * 1000; // 10 minutes
 
   // ─── DOM ────────────────────────────────────────────────────────
   const $ = (id) => document.getElementById(id);
@@ -40,10 +47,18 @@
     if (!appData.settings) appData.settings = {};
     if (!appData.reminders) appData.reminders = [];
     if (!appData.stats.dailyCompletions) appData.stats.dailyCompletions = {};
+    if (!appData.stats.recentCompletions) appData.stats.recentCompletions = [];
+    
+    // Ensure legacy tasks have xpGiven flag
+    appData.reminders.forEach(r => {
+      if (r.completed && r.xpGiven === undefined) r.xpGiven = true;
+      if (!r.completed && r.xpGiven === undefined) r.xpGiven = false;
+    });
 
     applyTheme(appData.settings.theme || 'dark');
     applySoundToggle(appData.settings.soundEnabled !== false);
     updateStreak();
+    applyFeatureLocks();
     renderTasks();
     renderXpBar();
     renderStats();
@@ -73,7 +88,6 @@
   // ─── Window Controls & Modes ────────────────────────────────────
   $('minimizeBtn').addEventListener('click', () => window.api.minimizeWindow());
   
-  // Priority Lock on Close
   $('closeBtn').addEventListener('click', () => {
     const today = todayStr();
     const hasUnfinishedHigh = appData.reminders.some(r => !r.completed && r.priority === 'high' && r.dueDate === today);
@@ -134,6 +148,7 @@
         id: Date.now().toString(36) + Math.random().toString(36).substr(2),
         text,
         completed: false,
+        xpGiven: false,
         createdAt: new Date().toISOString(),
         dueDate: $('dateInput').value || null,
         dueTime: $('timeInput').value || null,
@@ -163,19 +178,59 @@
     scheduleSave();
   }
 
-  // ─── CRUD & Undo System ─────────────────────────────────────────
+  // ─── CRUD & Gamification Logic ──────────────────────────────────
   function toggleReminder(id) {
     const r = appData.reminders.find(x => x.id === id);
     if (!r) return;
-    r.completed = !r.completed;
 
-    if (r.completed) {
-      const xpGain = r.priority === 'high' ? XP_HIGH_PRIORITY : XP_TASK_COMPLETE;
-      gainXP(xpGain);
-      appData.stats.totalCompleted = (appData.stats.totalCompleted || 0) + 1;
+    // Completing the task
+    if (!r.completed) {
+      // 1. Anti-spam check (must be at least 5 seconds old)
+      if (Date.now() - new Date(r.createdAt).getTime() < 5000) {
+        window.api.showNotification({ title: 'Spam Protection', body: 'Task completed too quickly! No XP awarded.' });
+        r.completed = true; // Complete it anyway, but no XP
+      } else {
+        r.completed = true;
+        
+        // 2. Only give XP once
+        if (!r.xpGiven) {
+          let xpToGive = 0;
+          
+          // Difficulty Scaling
+          if (r.priority === 'high') xpToGive += XP_HARD;
+          else if (r.priority === 'medium') xpToGive += XP_MEDIUM;
+          else xpToGive += XP_EASY;
 
-      const today = todayStr();
-      appData.stats.dailyCompletions[today] = (appData.stats.dailyCompletions[today] || 0) + 1;
+          // Smart XP Bonuses
+          const today = todayStr();
+          if (r.dueDate) {
+            if (r.dueDate > today) xpToGive += XP_EARLY_BONUS; // Early
+            if (r.dueDate < today) xpToGive += XP_LATE_BONUS;  // Overdue
+          }
+
+          gainXP(xpToGive);
+          r.xpGiven = true;
+          
+          // Combo System Tracking
+          const now = Date.now();
+          appData.stats.recentCompletions = appData.stats.recentCompletions.filter(t => now - t < COMBO_TIME_WINDOW);
+          appData.stats.recentCompletions.push(now);
+
+          if (appData.stats.recentCompletions.length >= 3) {
+            gainXP(XP_COMBO_BONUS);
+            appData.stats.recentCompletions = []; // Reset combo
+            window.api.showNotification({ title: '🔥 COMBO BONUS!', body: '3 tasks completed quickly. +15 XP!' });
+          }
+        }
+
+        appData.stats.totalCompleted = (appData.stats.totalCompleted || 0) + 1;
+        const today = todayStr();
+        appData.stats.dailyCompletions[today] = (appData.stats.dailyCompletions[today] || 0) + 1;
+      }
+    } else {
+      // Unchecking the task
+      r.completed = false;
+      // Do NOT reset xpGiven. The user already got XP for this.
     }
 
     renderTasks();
@@ -219,7 +274,7 @@
     scheduleSave();
   });
 
-  // ─── XP & Gamification ─────────────────────────────────────────
+  // ─── XP & Feature Unlocks ─────────────────────────────────────────
   function gainXP(amount) {
     const oldLevel = Math.floor(appData.stats.xp / XP_PER_LEVEL) + 1;
     appData.stats.xp = (appData.stats.xp || 0) + amount;
@@ -228,6 +283,18 @@
 
     if (newLevel > oldLevel) showLevelUp(newLevel);
     renderXpBar();
+    applyFeatureLocks();
+  }
+
+  function applyFeatureLocks() {
+    const level = appData.stats.level || 1;
+    const themeCont = $('themeContainer');
+    const soundCont = $('soundContainer');
+    const statsCont = $('advancedStatsContainer');
+
+    if (themeCont) themeCont.classList.toggle('is-locked', level < 3);
+    if (soundCont) soundCont.classList.toggle('is-locked', level < 5);
+    if (statsCont) statsCont.classList.toggle('is-locked', level < 10);
   }
 
   function renderXpBar() {
@@ -248,12 +315,17 @@
     if (appData.settings.soundEnabled !== false) playSound();
     window.api.showNotification({ title: 'Level Up!', body: `You reached Level ${level}!` });
 
+    let msg = 'Keep going — you are on fire.';
+    if (level === 3) msg = 'Themes unlocked! Check settings.';
+    if (level === 5) msg = 'Sound Effects unlocked! Check settings.';
+    if (level === 10) msg = 'Advanced Stats unlocked!';
+
     const overlay = document.createElement('div');
     overlay.className = 'levelup-overlay';
-    overlay.innerHTML = `<div class="levelup-card"><h2>Level ${level}</h2><p>Keep going — you are on fire.</p></div>`;
+    overlay.innerHTML = `<div class="levelup-card"><h2>Level ${level}</h2><p>${msg}</p></div>`;
     document.body.appendChild(overlay);
     overlay.addEventListener('click', () => overlay.remove());
-    setTimeout(() => overlay.remove(), 3000);
+    setTimeout(() => overlay.remove(), 4000);
   }
 
   function updateStreak() {
@@ -265,7 +337,11 @@
 
     if (last === yesterday) {
       appData.stats.streak = (appData.stats.streak || 0) + 1;
-      gainXP(XP_STREAK_BONUS * appData.stats.streak);
+      
+      // Streak Milestones
+      if (appData.stats.streak === 3) gainXP(XP_STREAK_3);
+      if (appData.stats.streak === 7) gainXP(XP_STREAK_7);
+
     } else if (last !== today) {
       appData.stats.streak = 1;
     }
@@ -305,6 +381,7 @@
   }
 
   function playSound() {
+    if (($('soundContainer') && $('soundContainer').classList.contains('is-locked')) || appData.settings.soundEnabled === false) return;
     try {
       const ctx = new AudioContext();
       const osc = ctx.createOscillator();
@@ -410,7 +487,7 @@
     }
     
     if (r.priority && r.priority !== 'medium') {
-      tags += `<span class="meta-tag priority-tag ${r.priority}">${r.priority === 'high' ? 'High' : 'Low'}</span>`;
+      tags += `<span class="meta-tag priority-tag ${r.priority}">${r.priority === 'high' ? 'Hard' : 'Easy'}</span>`;
     }
     if (r.category) {
       tags += `<span class="meta-tag">${r.category.charAt(0).toUpperCase() + r.category.slice(1)}</span>`;
@@ -560,8 +637,14 @@
     applySoundToggle(appData.settings.soundEnabled !== false);
   }
 
-  $('themeDarkBtn').addEventListener('click', () => setTheme('dark'));
-  $('themeLightBtn').addEventListener('click', () => setTheme('light'));
+  $('themeDarkBtn').addEventListener('click', () => {
+    if ($('themeContainer').classList.contains('is-locked')) return;
+    setTheme('dark');
+  });
+  $('themeLightBtn').addEventListener('click', () => {
+    if ($('themeContainer').classList.contains('is-locked')) return;
+    setTheme('light');
+  });
 
   function setTheme(t) {
     appData.settings.theme = t;
@@ -574,6 +657,7 @@
   function applyTheme(t) { document.documentElement.setAttribute('data-theme', t); }
 
   $('soundToggle').addEventListener('click', () => {
+    if ($('soundContainer').classList.contains('is-locked')) return;
     const on = !appData.settings.soundEnabled;
     appData.settings.soundEnabled = on;
     applySoundToggle(on);
@@ -613,6 +697,7 @@
       renderTasks();
       renderStats();
       loadSettingsUI();
+      applyFeatureLocks();
       window.api.showNotification({ title: 'Success', body: 'Backup imported successfully.' });
     }
   });
