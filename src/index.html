@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Reminder Widget</title>
-  <!-- Font: Uses system font stack (Inter if installed, else system defaults) -->
+  <title>Smart Reminder Widget</title>
+  <!-- Font: System stack with Inter priority -->
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -15,9 +15,15 @@
         <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
         <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
       </svg>
-      <span class="titlebar-title">Reminders</span>
+      <span class="titlebar-title">Smart Reminders</span>
     </div>
     <div class="titlebar-controls">
+      <button class="titlebar-btn" id="themeBtn" title="Toggle Theme">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+      <button class="titlebar-btn" id="backupBtn" title="Export Backup">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+      </button>
       <button class="titlebar-btn pin-btn" id="pinBtn" title="Toggle always on top">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <line x1="12" y1="17" x2="12" y2="22"></line>
@@ -40,7 +46,18 @@
 
   <!-- Main Content -->
   <div class="container">
-    <!-- Quick Add -->
+    <!-- Top Action Bar (Search) -->
+    <div class="top-bar">
+      <div class="search-wrapper">
+        <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        <input type="text" id="searchInput" placeholder="Search reminders..." />
+      </div>
+      <div class="sound-toggle" id="soundBtn" title="Toggle Sound">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="sound-icon-on"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+      </div>
+    </div>
+
+    <!-- Quick Add + Advanced Options -->
     <div class="add-section">
       <div class="input-wrapper">
         <svg class="input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -51,11 +68,43 @@
           type="text"
           id="reminderInput"
           class="reminder-input"
-          placeholder="Add a reminder... (Enter to save)"
+          placeholder="Add task... (gym at 6pm)"
           autocomplete="off"
           spellcheck="false"
         />
+        <button id="toggleAdvancedBtn" class="toggle-advanced-btn" title="Advanced Options">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
       </div>
+
+      <!-- Advanced Form Panel (Hidden by default) -->
+      <div class="advanced-panel" id="advancedPanel">
+        <div class="form-row">
+          <input type="date" id="dateInput" class="form-control" />
+          <input type="time" id="timeInput" class="form-control" />
+        </div>
+        <div class="form-row">
+          <select id="prioritySelect" class="form-control">
+            <option value="low">Low Priority</option>
+            <option value="medium" selected>Medium Priority</option>
+            <option value="high">High Priority</option>
+          </select>
+          <select id="categorySelect" class="form-control">
+            <option value="none">No Category</option>
+            <option value="work">Work</option>
+            <option value="personal">Personal</option>
+            <option value="school">School</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filters Tabs -->
+    <div class="filters-bar">
+      <button class="filter-tab active" data-filter="all">All</button>
+      <button class="filter-tab" data-filter="today">Today</button>
+      <button class="filter-tab" data-filter="high">High Priority</button>
+      <button class="filter-tab" data-filter="work">Work</button>
     </div>
 
     <!-- Stats Bar -->
@@ -81,8 +130,8 @@
           <line x1="16" y1="17" x2="8" y2="17"></line>
           <polyline points="10 9 9 9 8 9"></polyline>
         </svg>
-        <p>No reminders yet</p>
-        <span>Type above to add one</span>
+        <p>No reminders found</p>
+        <span>Add a new task above</span>
       </div>
     </div>
   </div>

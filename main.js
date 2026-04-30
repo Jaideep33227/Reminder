@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage, globalShortcut } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage, globalShortcut, Notification, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -40,17 +40,14 @@ let tray = null;
 let isQuitting = false;
 
 function getIconPath() {
-  // In production (asar), use the packaged path; in dev, use the project directory
-  const iconName = 'icon.png';
-  const devPath = path.join(__dirname, 'assets', iconName);
-  return devPath;
+  return path.join(__dirname, 'assets', 'icon.png');
 }
 
 function createWindow() {
   const { width: screenW, height: screenH } = screen.getPrimaryDisplay().workAreaSize;
 
-  const winWidth = 380;
-  const winHeight = 540;
+  const winWidth = 420; // Slightly wider for new features
+  const winHeight = 650; // Taller for more content
   const margin = 16;
 
   mainWindow = new BrowserWindow({
@@ -74,12 +71,10 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
 
-  // Smooth show after content is ready
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
   });
 
-  // Minimize to tray instead of closing
   mainWindow.on('close', (event) => {
     if (!isQuitting) {
       event.preventDefault();
@@ -103,7 +98,7 @@ function createTray() {
   }
 
   tray = new Tray(trayIcon);
-  tray.setToolTip('Reminder Widget');
+  tray.setToolTip('Smart Reminder Widget');
 
   const contextMenu = Menu.buildFromTemplate([
     {
@@ -166,12 +161,48 @@ ipcMain.handle('toggle-always-on-top', () => {
   return true;
 });
 
+// Notifications
+ipcMain.handle('show-notification', (_event, { title, body }) => {
+  if (Notification.isSupported()) {
+    const notif = new Notification({
+      title: title,
+      body: body,
+      icon: getIconPath(),
+      silent: true // We'll play custom sound in renderer
+    });
+    notif.show();
+    
+    notif.on('click', () => {
+      if (mainWindow) {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    });
+  }
+});
+
+// Export Backup
+ipcMain.handle('export-backup', async () => {
+  if (!mainWindow) return false;
+  const { filePath } = await dialog.showSaveDialog(mainWindow, {
+    title: 'Export Reminders Backup',
+    defaultPath: path.join(app.getPath('documents'), 'reminders-backup.json'),
+    filters: [{ name: 'JSON Files', extensions: ['json'] }]
+  });
+  
+  if (filePath) {
+    const data = loadReminders();
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
+    return true;
+  }
+  return false;
+});
+
 // ─── App Lifecycle ──────────────────────────────────────────────────
 app.whenReady().then(() => {
   createWindow();
   createTray();
 
-  // Global shortcut: Ctrl+Shift+R to show/focus the widget
   globalShortcut.register('Ctrl+Shift+R', () => {
     if (mainWindow) {
       if (mainWindow.isVisible()) {
@@ -180,7 +211,6 @@ app.whenReady().then(() => {
         mainWindow.show();
         mainWindow.focus();
       }
-      // Focus the input field via IPC
       mainWindow.webContents.send('focus-input');
     }
   });
