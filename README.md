@@ -1,32 +1,21 @@
-# ✨ Reminder Widget
+# Reminder Widget
 
 A lightweight, always-on-top desktop reminder assistant for Windows. Built with Electron.
 
-![Dark Mode Widget](https://img.shields.io/badge/theme-dark%20mode-6c63ff?style=for-the-badge)
-![Platform](https://img.shields.io/badge/platform-Windows-0078D6?style=for-the-badge&logo=windows)
-![Electron](https://img.shields.io/badge/Electron-33+-47848F?style=for-the-badge&logo=electron)
+## Features
 
----
+- **Always-On-Top** — Floating widget docked to the bottom-right corner.
+- **Smart Time-Based Reminders** — Background checks and native Windows notifications for scheduled tasks.
+- **Quick Add** — Type and press Enter to instantly add reminders, with advanced options for due dates and times.
+- **Organization** — Supports priority levels (High, Medium, Low) and categories (Work, Personal, School).
+- **Search & Filters** — Instantly filter your tasks by search query or category tabs.
+- **Persistent Storage** — Reminders are saved to a local JSON file to survive restarts.
+- **System Tray Integration** — Minimize/close the app to hide it to the system tray. Right-click the tray icon for options.
+- **Light & Dark Mode** — Clean UI that supports toggling between light and dark themes.
+- **Export & Backup** — Native backup feature to export your data.
+- **Keyboard Shortcuts** — Global shortcuts to quickly bring up the widget and add tasks.
 
-## 🎯 Features
-
-- **Always-On-Top** — Floating widget docked to the bottom-right corner
-- **Quick Add** — Type and press Enter to instantly add reminders
-- **Edit / Delete** — Double-click to edit, hover to reveal delete
-- **Toggle Complete** — Checkbox with animated strikethrough
-- **Persistent Storage** — Reminders saved to local JSON (survives restarts)
-- **System Tray** — Minimize/close hides to tray, right-click for options
-- **Pin/Unpin** — Toggle always-on-top from the title bar
-- **Keyboard Shortcuts**:
-  - `Ctrl+Shift+R` — Show widget and focus input (global)
-  - `Ctrl+N` — Focus input (in-app)
-  - `Enter` — Save reminder
-- **Dark Mode** — Premium glassmorphism design with smooth animations
-- **Draggable** — Custom title bar for repositioning
-
----
-
-## 📦 Installation
+## Installation
 
 ### Prerequisites
 
@@ -44,9 +33,7 @@ cd reminder-widget
 npm install
 ```
 
----
-
-## 🚀 Usage
+## Usage
 
 ### Run in Development
 
@@ -54,7 +41,7 @@ npm install
 npm start
 ```
 
-The widget will appear in the bottom-right corner of your screen.
+The widget will launch and appear in the bottom-right corner of your primary display.
 
 ### Build for Windows (.exe)
 
@@ -62,13 +49,20 @@ The widget will appear in the bottom-right corner of your screen.
 npm run build
 ```
 
-The installer and portable `.exe` will be generated in the `dist/` folder:
+The installer and portable `.exe` will be generated in the `dist/` directory:
 - `dist/Reminder Widget Setup X.X.X.exe` — NSIS installer
 - `dist/Reminder Widget X.X.X.exe` — Portable executable
 
----
+## Keyboard Shortcuts
 
-## 🗂️ Project Structure
+| Shortcut | Action |
+|---|---|
+| `Ctrl+Shift+R` | Show widget and focus input (global) |
+| `Ctrl+N` | Focus input field (in-app) |
+| `Enter` | Save reminder |
+| `Escape` | Cancel editing / Close advanced panel |
+
+## Project Structure
 
 ```
 reminder-widget/
@@ -76,48 +70,22 @@ reminder-widget/
 │   └── icon.png          # App icon
 ├── src/
 │   ├── index.html        # UI layout
-│   ├── styles.css        # Dark mode stylesheet
-│   └── renderer.js       # Frontend logic
-├── main.js               # Electron main process
-├── preload.js            # Secure IPC bridge
-├── package.json          # Config & dependencies
-├── .gitignore
-└── README.md
+│   ├── styles.css        # Stylesheet (Light/Dark themes)
+│   └── renderer.js       # Frontend application logic
+├── main.js               # Electron main process and IPC handlers
+├── preload.js            # Secure IPC context bridge
+├── package.json          # Configuration and dependencies
+├── .gitignore            # Git ignore rules
+└── README.md             # Project documentation
 ```
 
----
+## Configuration
 
-## ⌨️ Keyboard Shortcuts
-
-| Shortcut | Action |
-|---|---|
-| `Ctrl+Shift+R` | Show widget & focus input (global) |
-| `Ctrl+N` | Focus input field |
-| `Enter` | Add reminder |
-| `Escape` | Cancel editing |
-| `Double-click` | Edit a reminder |
-
----
-
-## 🎨 Design
-
-- **Color scheme**: Deep purple-blue dark mode (`#0f0f1a` → `#6c63ff` accents)
-- **Typography**: Inter (Google Fonts)
-- **Animations**: Slide-in/out, checkbox pop, hover glow
-- **Window**: Frameless, rounded corners, glassmorphism
-
----
-
-## 🔧 Configuration
-
-Reminders are stored at:
+Application data is stored locally in the standard Windows AppData directory:
 ```
 %APPDATA%/reminder-widget/data/reminders.json
 ```
 
----
+## License
 
-
-## 📄 License
-
-MIT © Jaideep
+MIT © Jaideep33227
